@@ -28,6 +28,8 @@ python scripts/discover_storygraph.py username --output-dir discovery-output
 
 The script checks profile, currently-reading, books-read, and to-read routes, follows links to DNF/reviews/Up Next when present, records relevant response headers and page signals, classifies access failures, and writes sanitised HTML fixtures plus `report.json`. It makes no authenticated requests.
 
+If StoryGraph returns a Cloudflare interstitial, the result is classified as `anti_bot_challenge`. It must not be parsed as a private profile or empty reading list.
+
 Do not commit captured fixtures containing personal information. Review and redact them before adding them to `tests/fixtures/`.
 
 ## Important limitations

@@ -1,8 +1,14 @@
 # StoryGraph discovery report
 
-Status: **pending capture and review**
+Status: **blocked by upstream anti-bot challenge; public HTML not yet captured**
 
 This report is deliberately kept separate from implementation. Run the discovery script against a consenting public test profile, redact the resulting fixtures, then record observed behaviour here before Phase 2.
+
+## Live capture: 2026-07-11
+
+The consenting test profile supplied for discovery returned `HTTP 403` from all four routes. Each response was a Cloudflare interstitial with a `Just a moment...` title and no StoryGraph book/profile content. The inspector now classifies this as `anti_bot_challenge`, not as evidence that the profile is private.
+
+No public StoryGraph HTML, stable identifiers, pagination behavior, or activity links were observable in this capture. The challenge responses were written outside the repository under `/tmp/storygraph-discovery-notcelery/` and were not committed as user fixtures.
 
 ## Capture checklist
 
@@ -32,4 +38,3 @@ Fill this section from the captured output. Do not infer selectors from an unoff
 ## Decision gate
 
 Implementation may proceed to typed parsing only after the fields needed for book identity, reading status, dates, rating, and review identity are evidenced in redacted public fixtures. If a field is not exposed reliably, document the limitation and do not promise the corresponding activity type.
-

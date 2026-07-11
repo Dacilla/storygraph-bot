@@ -83,6 +83,8 @@ def inspect_page_signals(html: str) -> tuple[str, ...]:
     signals: set[str] = set()
     if soup.find("form", action=re.compile(r"login|sign[-_]?in", re.I)) or "log in" in text:
         signals.add("login_marker")
+    if "just a moment" in text or "challenges.cloudflare.com" in html:
+        signals.add("cloudflare_challenge")
     if any(marker in text for marker in ("private profile", "profile is private", "access denied")):
         signals.add("private_or_denied_marker")
     if soup.find("a", rel=lambda value: value and "next" in value) or soup.find(string=re.compile(r"next", re.I)):
@@ -102,9 +104,11 @@ def classify_page(status: int | None, final_url: str | None, html: str) -> str:
         return "request_failed"
     if status == 404:
         return "missing"
+    signals = inspect_page_signals(html)
+    if "cloudflare_challenge" in signals:
+        return "anti_bot_challenge"
     if status in {401, 403}:
         return "private_or_denied"
-    signals = inspect_page_signals(html)
     if "login_marker" in signals or (final_url and re.search(r"/login|/sign-in", final_url, re.I)):
         return "login_page"
     if "private_or_denied_marker" in signals:

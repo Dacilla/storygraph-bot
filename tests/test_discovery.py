@@ -37,3 +37,8 @@ def test_private_and_missing_pages_are_classified_without_parsing_as_empty():
 def test_discovery_records_pagination_and_login_signals():
     html = '<form action="/login"><input></form><a rel="next" href="?page=2">Next</a><turbo-frame id="books"></turbo-frame>'
     assert inspect_page_signals(html) == ("login_marker", "pagination_marker", "turbo_frame")
+
+
+def test_cloudflare_challenge_is_not_treated_as_a_private_profile():
+    html = '<title>Just a moment...</title><script src="https://challenges.cloudflare.com/x.js"></script>'
+    assert classify_page(403, "https://app.thestorygraph.com/profile/a", html) == "anti_bot_challenge"
