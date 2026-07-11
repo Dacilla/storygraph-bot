@@ -26,7 +26,7 @@ pip install -r requirements.txt
 python scripts/discover_storygraph.py username --output-dir discovery-output
 ```
 
-The script checks profile, currently-reading, books-read, and to-read routes, follows links to DNF/reviews/Up Next when present, records relevant response headers, and writes sanitised HTML fixtures. It makes no authenticated requests.
+The script checks profile, currently-reading, books-read, and to-read routes, follows links to DNF/reviews/Up Next when present, records relevant response headers and page signals, classifies access failures, and writes sanitised HTML fixtures plus `report.json`. It makes no authenticated requests.
 
 Do not commit captured fixtures containing personal information. Review and redact them before adding them to `tests/fixtures/`.
 
@@ -41,4 +41,3 @@ pytest
 ```
 
 The eventual service will use Python 3.11+, `discord.py`, `aiohttp`, and SQLite. No StoryGraph credentials should be added to configuration.
-

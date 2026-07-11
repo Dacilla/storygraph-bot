@@ -18,6 +18,14 @@ from bs4 import BeautifulSoup
 BASE_URL = "https://app.thestorygraph.com"
 ROUTES = ("profile/{username}", "currently-reading/{username}", "books-read/{username}", "to-read/{username}")
 LINK_HINTS = ("dnf", "did-not-finish", "review", "up-next", "up_next")
+HEADER_NAMES = {
+    "etag",
+    "last-modified",
+    "cache-control",
+    "retry-after",
+    "x-ratelimit-limit",
+    "x-ratelimit-remaining",
+}
 
 
 @dataclass(frozen=True)
@@ -29,6 +37,9 @@ class ResponseRecord:
     headers: dict[str, str]
     content_hash: str | None
     fixture: str | None
+    page_classification: str | None
+    discovered_links: tuple[str, ...] = ()
+    page_signals: tuple[str, ...] = ()
     error: str | None = None
 
 
@@ -65,6 +76,46 @@ def discover_links(html: str, base_url: str) -> list[str]:
     return sorted(links)
 
 
+def inspect_page_signals(html: str) -> tuple[str, ...]:
+    """Return clues about access state and client-side/paginated rendering."""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(" ", strip=True).lower()
+    signals: set[str] = set()
+    if soup.find("form", action=re.compile(r"login|sign[-_]?in", re.I)) or "log in" in text:
+        signals.add("login_marker")
+    if any(marker in text for marker in ("private profile", "profile is private", "access denied")):
+        signals.add("private_or_denied_marker")
+    if soup.find("a", rel=lambda value: value and "next" in value) or soup.find(string=re.compile(r"next", re.I)):
+        signals.add("pagination_marker")
+    if soup.find(attrs={"data-turbo-frame": True}) or soup.find("turbo-frame"):
+        signals.add("turbo_frame")
+    if soup.find(attrs={"data-page": True}) or soup.find(attrs={"data-next-page": True}):
+        signals.add("client_pagination_marker")
+    if soup.find("script", src=re.compile(r"json|api|graphql", re.I)) or re.search(r"/(?:api|graphql)/", html, re.I):
+        signals.add("possible_json_endpoint")
+    return tuple(sorted(signals))
+
+
+def classify_page(status: int | None, final_url: str | None, html: str) -> str:
+    """Classify a response conservatively for the discovery report."""
+    if status is None:
+        return "request_failed"
+    if status == 404:
+        return "missing"
+    if status in {401, 403}:
+        return "private_or_denied"
+    signals = inspect_page_signals(html)
+    if "login_marker" in signals or (final_url and re.search(r"/login|/sign-in", final_url, re.I)):
+        return "login_page"
+    if "private_or_denied_marker" in signals:
+        return "private_or_denied"
+    if status >= 500:
+        return "server_error"
+    if status >= 400:
+        return "http_error"
+    return "public_or_unknown"
+
+
 async def inspect(username: str, output_dir: Path, user_agent: str, timeout_seconds: float = 20) -> list[ResponseRecord]:
     username = normalise_username(username)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -85,13 +136,25 @@ async def inspect(username: str, output_dir: Path, user_agent: str, timeout_seco
                     selected_headers = {
                         key: value
                         for key, value in response.headers.items()
-                        if key.lower() in {"etag", "last-modified", "cache-control", "retry-after", "x-ratelimit-limit", "x-ratelimit-remaining"}
+                        if key.lower() in HEADER_NAMES
                     }
-                    records.append(ResponseRecord(route, url, response.status, str(response.url), selected_headers, digest, fixture_name))
-                    for link in discover_links(body, str(response.url)):
+                    links = tuple(discover_links(body, str(response.url)))
+                    records.append(ResponseRecord(
+                        route,
+                        url,
+                        response.status,
+                        str(response.url),
+                        selected_headers,
+                        digest,
+                        fixture_name,
+                        classify_page(response.status, str(response.url), body),
+                        links,
+                        inspect_page_signals(body),
+                    ))
+                    for link in links:
                         print(f"discovered link: {link}")
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-                records.append(ResponseRecord(route, url, None, None, {}, None, None, type(exc).__name__))
+                records.append(ResponseRecord(route, url, None, None, {}, None, None, "request_failed", error=type(exc).__name__))
     (output_dir / "report.json").write_text(json.dumps([asdict(record) for record in records], indent=2), encoding="utf-8")
     return records
 
@@ -114,4 +177,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
